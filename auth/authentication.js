@@ -99,37 +99,84 @@ fs.readFile(templatePath, 'utf8', (err, templateData) => {
 });
 }
 
-// COMPANY REGISTRATION
-function register_company(req,res) {
-  const companyId = generateId();
+//Company_Registration
+async function register_company(req, res) {
+  const companyId = generateId(); // Assuming this is a utility function to generate unique IDs
+  const {
+    companyName, companyEmail, companyLocation, energyConsumerLtHt, sanctionedLoadKw, contractDemandKva,
+    connectedLoadKw, tariff, percentContractDemand, electricityBill, energyDetail, energyValue,
+    firstName, lastName, contactno, shift, personalemail, password, designation, plant, privileges
+  } = req.body;
 
-  const { companyName, companyEmail, companyLocation, energyConsumerLtHt, sanctionedLoadKw, contractDemandKva, connectedLoadKw, tariff, percentContractDemand, electricityBill, energyDetail, energyValue } = req.body;
-  
-  const insertQuery = `INSERT INTO ems_schema.ems_company_info
-  ("companyId", "companyName", "companyEmail", "companyLocation", "energyConsumptionLtHt", "sanctionedLoadKw", "contractDemandKva", "connectedLoadKw", "tariff", "percentContractDemand", "electricityBill", "energyDetail", "energyValue")
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`;
-  const insertvalues = [companyId, companyName, companyEmail, companyLocation, energyConsumerLtHt, sanctionedLoadKw, contractDemandKva, connectedLoadKw, tariff, percentContractDemand, electricityBill, energyDetail, energyValue];
-  
-  if (!companyName || !companyEmail || !companyLocation || !energyConsumerLtHt || !sanctionedLoadKw || !contractDemandKva || !connectedLoadKw || !tariff) {
-    return res.status(401).json({ message: 'Please fill all required parameters' });
-  }  
+  if (!password) {
+    return res.status(400).json({ message: 'Password is required.' });
+  }
 
-  // if (energyConsumerLtHt !== 'LT' && energyConsumerLtHt !== 'HT') {
-  //   return res.status(401).json({ message: 'Invalid value for energy_consumer_lt_ht.'});
-  // }
+  const verificationToken = jwtUtils.generateToken({ personalemail: personalemail });
 
-  // if (energyDetail && energyDetail !== 'Solar' && energyDetail !== 'Digi') {
-  //   return res.status(401).json({ message: 'Invalid value for energy_detail. Must be "solar" or "digi".' });
-  // }
+  const checkCompanyQuery = `SELECT 1 FROM ems_schema.ems_company_info WHERE "companyEmail" = $1`;
+  const checkUserQuery = `SELECT 1 FROM ems_schema.ems_user_info WHERE "personalEmail" = $1`;
 
-  db.query(insertQuery,insertvalues, (insertError,insertresult) => {
-        if (insertError) {
-            console.error('Error occured while inserting data', insertError);
-            return res.status(401).json({ message: 'Error while regristering company',error : insertError });
-        }  
-        return res.status(200).json({message:'Company Registered.'});
-    })
+  const registerCompanyQuery = `INSERT INTO ems_schema.ems_company_info
+    ("companyId", "companyName", "companyEmail", "companyLocation", "energyConsumptionLtHt", "sanctionedLoadKw",
+    "contractDemandKva", "connectedLoadKw", "tariff", "percentContractDemand", "electricityBill",
+    "energyDetail", "energyValue")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`;
 
+  const registerUserQuery = `INSERT INTO ems_schema.ems_user_info
+    ("userId", "userName", "firstName", "lastName", "companyId", "contactNo", shift, "personalEmail", "password",
+    "designation", "verificationToken", verified, plant, "privileges")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`;
+
+  const companyValues = [
+    companyId, companyName, companyEmail, companyLocation, energyConsumerLtHt, sanctionedLoadKw, contractDemandKva,
+    connectedLoadKw, tariff, percentContractDemand, electricityBill, energyDetail, energyValue
+  ];
+
+  try {
+    // Check if the company already exists
+    const companyResult = await db.query(checkCompanyQuery, [companyEmail]);
+    if (companyResult.rows.length > 0) {
+      return res.status(400).json({ message: 'Company already exists.' });
+    }
+
+    // Check if the user already exists
+    const userResult = await db.query(checkUserQuery, [personalemail]);
+    if (userResult.rows.length > 0) {
+      return res.status(400).json({ message: 'User already exists.' });
+    }
+
+    // Start a transaction
+    await db.query('BEGIN');
+
+    // Insert company data
+    await db.query(registerCompanyQuery, companyValues);
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const userId = generateId();
+    const userValues = [
+      userId, personalemail, firstName, lastName, companyId, contactno, shift, personalemail,
+      hashedPassword, designation, verificationToken, 0, plant, privileges
+    ];
+
+    // Insert user data
+    await db.query(registerUserQuery, userValues);
+
+    // Commit transaction
+    await db.query('COMMIT');
+
+    // Send verification email
+    sendTokenEmail(personalemail, verificationToken);
+
+    return res.status(200).json({ message: 'Company and user registered successfully.' });
+  } catch (error) {
+    // Rollback transaction in case of error
+    await db.query('ROLLBACK');
+    console.error('Error occurred during registration', error);
+    return res.status(500).json({ message: 'Error while registering company and user', error });
+  }
 }
 
 function updateCompany(req,res) {

@@ -126,9 +126,19 @@ function getUserById(req, res) {
 //get user information from feder
 function getFeederData(req, res) {
   const companyId = req.params.companyId; 
-  const getFeederQuery = 'SELECT * FROM ems_schema.ems_feeder WHERE "companyId" = $1';
-  
-  db.query(getFeederQuery, [companyId], (getFeederError, getFeederResult) => {
+  const parameter = req.params.parameter; 
+  let getFeederQuery;
+  let queryParams;
+
+  if (parameter === 'all') {
+    getFeederQuery = 'SELECT * FROM ems_schema.ems_feeder WHERE "companyId" = $1';
+    queryParams = [companyId];
+  } else {
+    getFeederQuery = 'SELECT * FROM ems_schema.ems_feeder WHERE "companyId" = $1 AND "groupName" = $2';
+    queryParams = [companyId, parameter];
+  }
+
+  db.query(getFeederQuery, queryParams, (getFeederError, getFeederResult) => {
     if (getFeederError) {
       return res.status(500).json({ message: 'Error while fetching data', error: getFeederError });
     }
