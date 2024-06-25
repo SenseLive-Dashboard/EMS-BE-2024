@@ -25,7 +25,7 @@ router.put('/updatePassword/:personalEmail', dashboard.updatePassword);
 router.get('/getUserById/:userId' , dashboard.getUserById);
 
 // FEEDER
-router.get('/getFeederData/:companyId' , dashboard.getFeederData);
+router.get('/getFeederData/:companyId/:parameter' , dashboard.getFeederData);
 router.delete('/delete_feeder/:feederId' , dashboard.delete_feeder);
 router.put('/editfeeders/:feederId', dashboard.editFeeders);
 router.post('/addfeeder', dashboard.addfeeder);
